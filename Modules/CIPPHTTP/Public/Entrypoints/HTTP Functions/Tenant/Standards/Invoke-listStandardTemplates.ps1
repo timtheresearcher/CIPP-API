@@ -35,16 +35,19 @@ function Invoke-listStandardTemplates {
                 } -Force
                 Write-LogMessage -headers $Request.Headers -API 'Standards' -message "Standards template '$($RowKey)' contained corrupt data (case-duplicate keys) and was automatically repaired and re-saved." -Sev 'Warning'
             } catch {
-                Write-LogMessage -headers $Request.Headers -API 'Standards' -message "Standards template '$($RowKey)' was repaired for this response but could not be re-saved: $($_.Exception.Message)" -Sev 'Warning'
+                Write-LogMessage -headers $Request.Headers -API 'Standards' -message "Standards template '$($RowKey)' was repaired but could not be re-saved, so it was omitted from the response: $($_.Exception.Message)" -Sev 'Error'
+                return
             }
         }
         if ($Data) {
-            $Data | Add-Member -NotePropertyName 'GUID' -NotePropertyValue $_.GUID -Force
-            $Data | Add-Member -NotePropertyName 'source' -NotePropertyValue $_.Source -Force
-            $Data | Add-Member -NotePropertyName 'isSynced' -NotePropertyValue (![string]::IsNullOrEmpty($_.SHA)) -Force
+            $DataProps = [ordered]@{
+                GUID     = $_.GUID
+                source   = $_.Source
+                isSynced = (![string]::IsNullOrEmpty($_.SHA))
+            }
 
             if (!$Data.excludedTenants) {
-                $Data | Add-Member -NotePropertyName 'excludedTenants' -NotePropertyValue @() -Force
+                $DataProps['excludedTenants'] = @()
             } else {
                 if ($Data.excludedTenants -and $Data.excludedTenants -ne 'excludedTenants') {
                     $Data.excludedTenants = @($Data.excludedTenants)
@@ -52,6 +55,7 @@ function Invoke-listStandardTemplates {
                     $Data.excludedTenants = @()
                 }
             }
+            $Data | Add-Member -NotePropertyMembers $DataProps -Force
 
             # Re-expand TemplateList-Tags live so stale addedFields snapshots don't show removed templates
             if ($Data.standards) {
